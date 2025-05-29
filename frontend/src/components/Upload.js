@@ -4,6 +4,7 @@ import Chart from "./Chart";
 
 const Upload = () => {
   const [file, setFile] = useState(null);
+  const [preview, setPreview] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
 
@@ -27,6 +28,24 @@ const Upload = () => {
     }
   };
 
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+      // 圖片預覽
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreview(reader.result); // 預覽圖片的 Base64 URL
+      };
+      reader.readAsDataURL(selectedFile);
+      setError("");
+    } else {
+      setFile(null);
+      setPreview(null);
+      setError("請選擇一張圖片");
+    }
+  };
+
   const handleDownload = () => {
     if (result?.processed_image) {
       const link = document.createElement("a");
@@ -45,11 +64,17 @@ const Upload = () => {
   return (
     <div style={{ padding: "20px" }}>
       <h2>上傳照片</h2>
-      <input
-        type="file"
-        accept="image/*"
-        onChange={(e) => setFile(e.target.files[0])}
-      />
+      <input type="file" accept="image/*" onChange={handleFileChange} />
+      {preview && (
+        <div style={{ margin: "20px 0" }}>
+          <h3>預覽圖片</h3>
+          <img
+            src={preview}
+            alt="Preview"
+            style={{ maxWidth: "300px", maxHeight: "300px" }}
+          />
+        </div>
+      )}
       <button onClick={handleUpload}>提交</button>
       {error && <p style={{ color: "red" }}>{error}</p>}
       {result && (
