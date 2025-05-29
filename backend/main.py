@@ -12,7 +12,7 @@ import tensorflow as tf
 
 app = FastAPI()
 redis_client = redis.Redis(host="redis", port=6379, decode_responses=True)
-model = tf.keras.models.load_model("models/emotion_model.h5")
+model = tf.keras.models.load_model("models/my_emotion_model.h5")
 emotions = ["angry", "disgust", "fear", "happy", "sad", "neutral", "surprise"]
 mp_selfie_segmentation = mp.solutions.selfie_segmentation.SelfieSegmentation(
     model_selection=1
