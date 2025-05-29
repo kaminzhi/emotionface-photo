@@ -14,25 +14,37 @@ const Chart = ({ probabilities }) => {
   if (!probabilities) return null;
 
   const data = {
-    labels: ["開心", "難過", "憤怒", "中性", "驚訝"],
+    labels: ["憤怒", "厭惡", "恐懼", "開心", "難過", "中性", "驚訝"],
     datasets: [
       {
         label: "情緒機率",
         data: [
+          probabilities.angry,
+          probabilities.disgust,
+          probabilities.fear,
           probabilities.happy,
           probabilities.sad,
-          probabilities.angry,
           probabilities.neutral,
-          probabilities.surprised,
+          probabilities.surprise,
         ],
         backgroundColor: [
-          "#4CAF50",
-          "#F44336",
-          "#FF9800",
-          "#2196F3",
-          "#9C27B0",
+          "#F44336", // angry
+          "#8BC34A", // disgust
+          "#FF9800", // fear
+          "#4CAF50", // happy
+          "#2196F3", // sad
+          "#9E9E9E", // neutral
+          "#E91E63", // surprise
         ],
-        borderColor: ["#388E3C", "#D32F2F", "#F57C00", "#1976D2", "#7B1FA2"],
+        borderColor: [
+          "#D32F2F",
+          "#689F38",
+          "#F57C00",
+          "#388E3C",
+          "#1976D2",
+          "#616161",
+          "#C2185B",
+        ],
         borderWidth: 1,
       },
     ],

@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import cv2
 import numpy as np
 import mediapipe as mp
@@ -9,93 +10,147 @@ import base64
 import redis
 import random
 import tensorflow as tf
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
+
+# Add CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Redis connection
 redis_client = redis.Redis(host="redis", port=6379, decode_responses=True)
+
+# Load model
 model = tf.keras.models.load_model("models/my_emotion_model.h5")
 emotions = ["angry", "disgust", "fear", "happy", "sad", "neutral", "surprise"]
+
+# MediaPipe initialization
 mp_selfie_segmentation = mp.solutions.selfie_segmentation.SelfieSegmentation(
     model_selection=1
 )
 
 
 def process_image(image: np.ndarray):
-    face_cascade = cv2.CascadeClassifier(
-        cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-    )
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    faces = face_cascade.detectMultiScale(
-        gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30)
-    )
-    if len(faces) == 0:
-        return None, None, "無法辨識到人臉"
-    (x, y, w, h) = faces[0]
-    face = gray[y : y + h, x : x + w]
-    face = cv2.resize(face, (48, 48))
-    face_input = face.reshape(1, 48, 48, 1) / 255.0
-    probabilities = model.predict(face_input)[0]
-    emotion_idx = np.argmax(probabilities)
-    emotion = emotions[emotion_idx]
-    return face, dict(zip(emotions, probabilities.tolist())), emotion
+    try:
+        face_cascade = cv2.CascadeClassifier(
+            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        )
+        if face_cascade.empty():
+            logger.error("Failed to load haarcascade_frontalface_default.xml")
+            return None, None, "無法載入臉部偵測模型"
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(
+            gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30)
+        )
+        if len(faces) == 0:
+            logger.warning("No faces detected in image")
+            return None, None, "無法辨識到人臉"
+        (x, y, w, h) = faces[0]
+        face = gray[y : y + h, x : x + w]
+        face = cv2.resize(face, (48, 48))
+        face_input = face.reshape(1, 48, 48, 1) / 255.0
+        probabilities = model.predict(face_input, verbose=0)[0]
+        emotion_idx = np.argmax(probabilities)
+        emotion = emotions[emotion_idx]
+        return face, dict(zip(emotions, probabilities.tolist())), emotion
+    except Exception as e:
+        logger.error(f"Error processing image: {str(e)}")
+        return None, None, f"圖片處理失敗: {str(e)}"
 
 
 def place_emojis(image: np.ndarray, emoji_path: str, num_placements: int = 3):
-    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    results = mp_selfie_segmentation.process(image_rgb)
-    mask = results.segmentation_mask > 0.5
-    emoji = Image.open(emoji_path).convert("RGBA")
-    output = Image.fromarray(image_rgb).convert("RGBA")
-    placed = 0
-    positions = []
-    h, w = image.shape[:2]
-    while placed < num_placements:
-        x = random.randint(0, w - emoji.width)
-        y = random.randint(0, h - emoji.height)
-        if mask[y, x]:
-            too_close = False
-            for px, py in positions:
-                if ((x - px) ** 2 + (y - py) ** 2) ** 0.5 < 50:
-                    too_close = True
-                    break
-            if not too_close:
-                angle = random.randint(0, 360)
-                rotated_emoji = emoji.rotate(angle, expand=True)
-                output.paste(rotated_emoji, (x, y), rotated_emoji)
-                positions.append((x, y))
-                placed += 1
-    return cv2.cvtColor(np.array(output), cv2.COLOR_RGBA2BGR)
+    try:
+        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        results = mp_selfie_segmentation.process(image_rgb)
+        mask = results.segmentation_mask > 0.5
+        emoji = Image.open(emoji_path).convert("RGBA")
+        output = Image.fromarray(image_rgb).convert("RGBA")
+        placed = 0
+        positions = []
+        h, w = image.shape[:2]
+        while placed < num_placements:
+            x = random.randint(0, w - emoji.width)
+            y = random.randint(0, h - emoji.height)
+            if mask[y, x]:
+                too_close = False
+                for px, py in positions:
+                    if ((x - px) ** 2 + (y - py) ** 2) ** 0.5 < 50:
+                        too_close = True
+                        break
+                if not too_close:
+                    angle = random.randint(0, 360)
+                    rotated_emoji = emoji.rotate(angle, expand=True)
+                    output.paste(rotated_emoji, (x, y), rotated_emoji)
+                    positions.append((x, y))
+                    placed += 1
+        return cv2.cvtColor(np.array(output), cv2.COLOR_RGBA2BGR)
+    except Exception as e:
+        logger.error(f"Error placing emojis: {str(e)}")
+        raise
 
 
 @app.post("/upload")
 async def upload_image(file: UploadFile = File(...)):
-    contents = await file.read()
-    nparr = np.frombuffer(contents, np.uint8)
-    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    face, probabilities, emotion = process_image(image)
-    if face is None:
-        return JSONResponse(content={"error": emotion}, status_code=400)
-    emoji_paths = redis_client.lrange(f"emotion:{emotion}", 0, -1)
-    if not emoji_paths:
+    try:
+        contents = await file.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if image is None:
+            logger.error("Failed to decode image")
+            return JSONResponse(
+                content={"error": "無法解析圖片"},
+                status_code=400,
+                headers={"Access-Control-Allow-Origin": "http://localhost:3000"},
+            )
+        face, probabilities, emotion = process_image(image)
+        if face is None:
+            return JSONResponse(
+                content={"error": emotion},
+                status_code=400,
+                headers={"Access-Control-Allow-Origin": "http://localhost:3000"},
+            )
+        emoji_paths = redis_client.lrange(f"emotion:{emotion}", 0, -1)
+        if not emoji_paths:
+            logger.warning(f"No emojis found for emotion: {emotion}")
+            return JSONResponse(
+                content={"error": f"無{emotion}的表情符號"},
+                status_code=400,
+                headers={"Access-Control-Allow-Origin": "http://localhost:3000"},
+            )
+        emoji_path = random.choice(emoji_paths)
+        processed_image = place_emojis(image, emoji_path)
+        _, face_buffer = cv2.imencode(".png", face)
+        _, processed_buffer = cv2.imencode(".png", processed_image)
+        face_base64 = base64.b64encode(face_buffer).decode("utf-8")
+        processed_base64 = base64.b64encode(processed_buffer).decode("utf-8")
+        return {
+            "face_image": f"data:image/png;base64,{face_base64}",
+            "emotion": emotion,
+            "probabilities": probabilities,
+            "processed_image": f"data:image/png;base64,{processed_base64}",
+        }
+    except Exception as e:
+        logger.error(f"Error in /upload endpoint: {str(e)}")
         return JSONResponse(
-            content={"error": f"無{emotion}的表情符號"}, status_code=400
+            content={"error": f"處理失敗: {str(e)}"},
+            status_code=500,
+            headers={"Access-Control-Allow-Origin": "http://localhost:3000"},
         )
-    emoji_path = random.choice(emoji_paths)
-    processed_image = place_emojis(image, emoji_path)
-    _, face_buffer = cv2.imencode(".png", face)
-    _, processed_buffer = cv2.imencode(".png", processed_image)
-    face_base64 = base64.b64encode(face_buffer).decode("utf-8")
-    processed_base64 = base64.b64encode(processed_buffer).decode("utf-8")
-    return {
-        "face_image": f"data:image/png;base64,{face_base64}",
-        "emotion": emotion,
-        "probabilities": probabilities,
-        "processed_image": f"data:image/png;base64,{processed_base64}",
-    }
 
 
 @app.post("/admin/upload")
 async def admin_upload(emotion: str, file: UploadFile = File(...)):
     if emotion not in emotions:
+        logger.error(f"Invalid emotion: {emotion}")
         raise HTTPException(status_code=400, detail="無效的情緒")
     file_path = f"static/emojis/{file.filename}"
     with open(file_path, "wb") as f:

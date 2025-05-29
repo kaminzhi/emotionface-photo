@@ -22,7 +22,7 @@ const Upload = () => {
       setResult(response.data);
       setError("");
     } catch (err) {
-      setError(err.response?.data?.error || "處理失敗");
+      setError(err.response?.data?.error || "處理失敗，請稍後再試");
       setResult(null);
     }
   };
@@ -43,7 +43,7 @@ const Upload = () => {
   };
 
   return (
-    <div>
+    <div style={{ padding: "20px" }}>
       <h2>上傳照片</h2>
       <input
         type="file"

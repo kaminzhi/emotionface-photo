@@ -41,12 +41,14 @@ const Admin = () => {
     <div>
       <h2>管理表情符號</h2>
       <select onChange={(e) => setEmotion(e.target.value)} value={emotion}>
+        <option value="angry">憤怒</option>
+        <option value="disgust">厭惡</option>
+        <option value="fear">恐懼</option>
         <option value="happy">開心</option>
         <option value="sad">難過</option>
-        <option value="angry">憤怒</option>
         <option value="neutral">中性</option>
-        <option value="surprised">驚訝</option>
-      </選項>
+        <option value="surprise">驚訝</option>
+      </select>
       <input
         type="file"
         accept="image/*"
