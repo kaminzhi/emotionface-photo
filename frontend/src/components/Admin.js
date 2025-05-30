@@ -22,14 +22,23 @@ const Admin = () => {
       return;
     }
     const formData = new FormData();
-    formData.append("emotion", emotion);
-    formData.append("file", file);
+    formData.append("emotion", emotion); // 確保 emotion 欄位
+    formData.append("file", file); // 檔案欄位
     try {
-      await axios.post("http://localhost:8000/admin/upload", formData);
+      await axios.post("http://localhost:8000/admin/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
       setError("");
       fetchEmotions();
     } catch (err) {
-      setError("上傳失敗");
+      // 處理 FastAPI 的錯誤回應
+      const errorDetail = err.response?.data?.detail;
+      if (Array.isArray(errorDetail)) {
+        // 提取第一個錯誤的 msg
+        setError(errorDetail[0]?.msg || "上傳失敗");
+      } else {
+        setError(errorDetail || "上傳失敗");
+      }
     }
   };
 
@@ -38,7 +47,7 @@ const Admin = () => {
   }, []);
 
   return (
-    <div>
+    <div style={{ padding: "20px" }}>
       <h2>管理表情符號</h2>
       <select onChange={(e) => setEmotion(e.target.value)} value={emotion}>
         <option value="angry">憤怒</option>

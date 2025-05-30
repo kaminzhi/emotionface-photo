@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import cv2
@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# Add CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -26,14 +25,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Redis connection
 redis_client = redis.Redis(host="redis", port=6379, decode_responses=True)
-
-# Load model
 model = tf.keras.models.load_model("models/my_emotion_model.h5")
 emotions = ["angry", "disgust", "fear", "happy", "sad", "neutral", "surprise"]
-
-# MediaPipe initialization
 mp_selfie_segmentation = mp.solutions.selfie_segmentation.SelfieSegmentation(
     model_selection=1
 )
@@ -148,15 +142,19 @@ async def upload_image(file: UploadFile = File(...)):
 
 
 @app.post("/admin/upload")
-async def admin_upload(emotion: str, file: UploadFile = File(...)):
+async def admin_upload(emotion: str = Form(...), file: UploadFile = File(...)):
     if emotion not in emotions:
         logger.error(f"Invalid emotion: {emotion}")
-        raise HTTPException(status_code=400, detail="無效的情緒")
-    file_path = f"static/emojis/{file.filename}"
-    with open(file_path, "wb") as f:
-        f.write(await file.read())
-    redis_client.lpush(f"emotion:{emotion}", file_path)
-    return {"message": f"成功上傳到{emotion}"}
+        raise HTTPException(status_code=400, detail=f"無效的情緒: {emotion}")
+    try:
+        file_path = f"static/emojis/{file.filename}"
+        with open(file_path, "wb") as f:
+            f.write(await file.read())
+        redis_client.lpush(f"emotion:{emotion}", file_path)
+        return {"message": f"成功上傳到{emotion}"}
+    except Exception as e:
+        logger.error(f"Error uploading file: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"檔案上傳失敗: {str(e)}")
 
 
 @app.get("/admin/emotions")

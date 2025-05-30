@@ -1,6 +1,7 @@
 .venv/
 .env
 .git/
+__pycache__/
 
 .package-lock.json
 node_modules/
