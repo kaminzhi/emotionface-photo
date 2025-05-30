@@ -11,6 +11,7 @@ const Admin = () => {
     try {
       const response = await axios.get("http://localhost:8000/admin/emotions");
       setEmotions(response.data);
+      setError("");
     } catch (err) {
       setError("無法獲取情緒列表");
     }
@@ -41,14 +42,14 @@ const Admin = () => {
     }
   };
 
-  const handleDelete = async (emotion, filename) => {
-    if (!window.confirm(`確定要刪除 ${filename} 嗎？`)) return;
+  const handleDelete = async (emotion, emoji_name) => {
+    if (!window.confirm(`確定要刪除 ${emoji_name} 嗎？`)) return;
     try {
       await axios.post(
         "http://localhost:8000/admin/delete",
         new URLSearchParams({
           emotion,
-          filename,
+          emoji_name,
         }),
         {
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -90,26 +91,30 @@ const Admin = () => {
       <button onClick={handleUpload}>上傳</button>
       {error && <p style={{ color: "red" }}>{error}</p>}
       <h3>現有表情符號</h3>
-      {Object.entries(emotions).map(([emo, files]) => (
+      {Object.entries(emotions).map(([emo, emojis]) => (
         <div key={emo}>
           <h4>{emo}</h4>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
-            {files.map((file, index) => (
-              <div key={index} style={{ textAlign: "center" }}>
-                <img
-                  src={`http://localhost:8000/static/emojis/${file.split("/").pop()}`}
-                  alt={file}
-                  style={{ width: "64px", height: "64px" }}
-                />
-                <p>{file.split("/").pop()}</p>
-                <button
-                  onClick={() => handleDelete(emo, file)}
-                  style={{ color: "red" }}
-                >
-                  刪除
-                </button>
-              </div>
-            ))}
+            {emojis && emojis.length > 0 ? (
+              emojis.map(({ name, base64 }) => (
+                <div key={name} style={{ textAlign: "center" }}>
+                  <img
+                    src={`data:image/png;base64,${base64}`}
+                    alt={name}
+                    style={{ width: "64px", height: "64px" }}
+                  />
+                  <p>{name}</p>
+                  <button
+                    onClick={() => handleDelete(emo, name)}
+                    style={{ color: "red" }}
+                  >
+                    刪除
+                  </button>
+                </div>
+              ))
+            ) : (
+              <p>無表情符號</p>
+            )}
           </div>
         </div>
       ))}

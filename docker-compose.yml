@@ -9,6 +9,8 @@ services:
       - redis
     environment:
       - REDIS_HOST=redis
+      - TF_ENABLE_ONEDNN_OPTS=0
+      - TF_CPP_MIN_LOG_LEVEL=2
     volumes:
       - ./backend:/app
   redis:
@@ -17,5 +19,6 @@ services:
       - "6379:6379"
     volumes:
       - redis-data:/data
+    command: redis-server --appendonly yes
 volumes:
   redis-data:

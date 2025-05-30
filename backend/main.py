@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import cv2
 import numpy as np
@@ -11,8 +11,7 @@ import redis
 import random
 import tensorflow as tf
 import logging
-import os
-from pathlib import Path
+import json
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -63,12 +62,14 @@ def process_image(image: np.ndarray):
         return None, None, f"圖片處理失敗: {str(e)}"
 
 
-def place_emojis(image: np.ndarray, emoji_path: str, num_placements: int = None):
+def place_emojis(image: np.ndarray, emoji_base64: str, num_placements: int = None):
     try:
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         results = mp_selfie_segmentation.process(image_rgb)
         mask = results.segmentation_mask <= 0.5  # 背景區域
-        emoji = Image.open(emoji_path).convert("RGBA")
+        # 解碼 Base64
+        emoji_data = base64.b64decode(emoji_base64)
+        emoji = Image.open(io.BytesIO(emoji_data)).convert("RGBA")
         emoji = emoji.resize((64, 64), Image.Resampling.LANCZOS)  # 64x64
         output = Image.fromarray(image_rgb).convert("RGBA")
         human_mask_image = image_rgb.copy()
@@ -82,7 +83,7 @@ def place_emojis(image: np.ndarray, emoji_path: str, num_placements: int = None)
         positions = []
         h, w = image.shape[:2]
         num_placements = (
-            random.randint(20, 30) if num_placements is None else num_placements
+            random.randint(3, 5) if num_placements is None else num_placements
         )
         max_attempts = 100
         attempts = 0
@@ -136,16 +137,17 @@ async def upload_image(file: UploadFile = File(...)):
                 status_code=400,
                 headers={"Access-Control-Allow-Origin": "http://localhost:3000"},
             )
-        emoji_paths = redis_client.lrange(f"emotion:{emotion}", 0, -1)
-        if not emoji_paths:
+        # 從 Redis 獲取表情符號 Base64
+        emoji_entries = redis_client.hgetall(f"emotion:{emotion}")
+        if not emoji_entries:
             logger.warning(f"No emojis found for emotion: {emotion}")
             return JSONResponse(
                 content={"error": f"無{emotion}的表情符號"},
                 status_code=400,
                 headers={"Access-Control-Allow-Origin": "http://localhost:3000"},
             )
-        emoji_path = random.choice(emoji_paths)
-        processed_image, human_mask_image = place_emojis(image, emoji_path)
+        emoji_base64 = random.choice(list(emoji_entries.values()))
+        processed_image, human_mask_image = place_emojis(image, emoji_base64)
         _, face_buffer = cv2.imencode(".png", face)
         _, processed_buffer = cv2.imencode(".png", processed_image)
         _, human_mask_buffer = cv2.imencode(".png", human_mask_image)
@@ -174,48 +176,42 @@ async def admin_upload(emotion: str = Form(...), file: UploadFile = File(...)):
         logger.error(f"Invalid emotion: {emotion}")
         raise HTTPException(status_code=400, detail=f"無效的情緒: {emotion}")
     try:
-        # 確定檔案副檔名
-        ext = Path(file.filename).suffix.lower()
-        if ext not in [".jpg", ".jpeg", ".png"]:
+        # 驗證檔案格式
+        ext = file.filename.lower().split(".")[-1]
+        if ext not in ["jpg", "jpeg", "png"]:
             raise HTTPException(status_code=400, detail="僅支援 JPG 或 PNG 檔案")
 
-        # 檢查現有檔案，生成新檔名
-        emoji_dir = "static/emojis"
-        os.makedirs(emoji_dir, exist_ok=True)
-        existing_files = redis_client.lrange(f"emotion:{emotion}", 0, -1)
-        index = 1
-        while True:
-            new_filename = f"{emotion}_{index}{ext}"
-            new_filepath = os.path.join(emoji_dir, new_filename)
-            if new_filepath not in existing_files:
-                break
-            index += 1
+        # 讀取檔案並轉為 Base64
+        contents = await file.read()
+        emoji_base64 = base64.b64encode(contents).decode("utf-8")
 
-        # 儲存檔案
-        with open(new_filepath, "wb") as f:
-            f.write(await file.read())
-        redis_client.lpush(f"emotion:{emotion}", new_filepath)
-        return {"message": f"成功上傳到 {emotion}，檔案名: {new_filename}"}
+        # 生成表情符號名稱
+        existing_emojis = redis_client.hkeys(f"emotion:{emotion}")
+        index = 1
+        while f"{emotion}{index}" in existing_emojis:
+            index += 1
+        emoji_name = f"{emotion}{index}"
+
+        # 儲存至 Redis
+        redis_client.hset(f"emotion:{emotion}", emoji_name, emoji_base64)
+        return {"message": f"成功上傳到 {emotion}，名稱: {emoji_name}"}
     except Exception as e:
         logger.error(f"Error uploading file: {str(e)}")
         raise HTTPException(status_code=500, detail=f"檔案上傳失敗: {str(e)}")
 
 
 @app.post("/admin/delete")
-async def admin_delete(emotion: str = Form(...), filename: str = Form(...)):
+async def admin_delete(emotion: str = Form(...), emoji_name: str = Form(...)):
     if emotion not in emotions:
         logger.error(f"Invalid emotion: {emotion}")
         raise HTTPException(status_code=400, detail=f"無效的情緒: {emotion}")
     try:
-        filepath = filename
-        if filepath not in redis_client.lrange(f"emotion:{emotion}", 0, -1):
-            raise HTTPException(status_code=404, detail="檔案不存在")
-        if os.path.exists(filepath):
-            os.remove(filepath)
-        redis_client.lrem(f"emotion:{emotion}", 0, filepath)
-        return {"message": f"成功刪除 {filepath}"}
+        if not redis_client.hexists(f"emotion:{emotion}", emoji_name):
+            raise HTTPException(status_code=404, detail="表情符號不存在")
+        redis_client.hdel(f"emotion:{emotion}", emoji_name)
+        return {"message": f"成功刪除 {emoji_name}"}
     except Exception as e:
-        logger.error(f"Error deleting file: {str(e)}")
+        logger.error(f"Error deleting emoji: {str(e)}")
         raise HTTPException(status_code=500, detail=f"檔案刪除失敗: {str(e)}")
 
 
@@ -223,13 +219,9 @@ async def admin_delete(emotion: str = Form(...), filename: str = Form(...)):
 async def get_emotions():
     result = {}
     for emotion in emotions:
-        result[emotion] = redis_client.lrange(f"emotion:{emotion}", 0, -1)
+        emojis = redis_client.hgetall(f"emotion:{emotion}")
+        result[emotion] = [
+            {"name": name, "base64": base64_data}
+            for name, base64_data in emojis.items()
+        ]
     return result
-
-
-@app.get("/static/emojis/{filename}")
-async def get_emoji(filename: str):
-    filepath = os.path.join("static/emojis", filename)
-    if not os.path.exists(filepath):
-        raise HTTPException(status_code=404, detail="檔案不存在")
-    return FileResponse(filepath)
