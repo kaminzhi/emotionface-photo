@@ -22,22 +22,46 @@ const Admin = () => {
       return;
     }
     const formData = new FormData();
-    formData.append("emotion", emotion); // 確保 emotion 欄位
-    formData.append("file", file); // 檔案欄位
+    formData.append("emotion", emotion);
+    formData.append("file", file);
     try {
       await axios.post("http://localhost:8000/admin/upload", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setError("");
+      setFile(null);
       fetchEmotions();
     } catch (err) {
-      // 處理 FastAPI 的錯誤回應
       const errorDetail = err.response?.data?.detail;
       if (Array.isArray(errorDetail)) {
-        // 提取第一個錯誤的 msg
         setError(errorDetail[0]?.msg || "上傳失敗");
       } else {
         setError(errorDetail || "上傳失敗");
+      }
+    }
+  };
+
+  const handleDelete = async (emotion, filename) => {
+    if (!window.confirm(`確定要刪除 ${filename} 嗎？`)) return;
+    try {
+      await axios.post(
+        "http://localhost:8000/admin/delete",
+        new URLSearchParams({
+          emotion,
+          filename,
+        }),
+        {
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        },
+      );
+      setError("");
+      fetchEmotions();
+    } catch (err) {
+      const errorDetail = err.response?.data?.detail;
+      if (Array.isArray(errorDetail)) {
+        setError(errorDetail[0]?.msg || "刪除失敗");
+      } else {
+        setError(errorDetail || "刪除失敗");
       }
     }
   };
@@ -69,11 +93,24 @@ const Admin = () => {
       {Object.entries(emotions).map(([emo, files]) => (
         <div key={emo}>
           <h4>{emo}</h4>
-          <ul>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
             {files.map((file, index) => (
-              <li key={index}>{file}</li>
+              <div key={index} style={{ textAlign: "center" }}>
+                <img
+                  src={`http://localhost:8000/static/emojis/${file.split("/").pop()}`}
+                  alt={file}
+                  style={{ width: "64px", height: "64px" }}
+                />
+                <p>{file.split("/").pop()}</p>
+                <button
+                  onClick={() => handleDelete(emo, file)}
+                  style={{ color: "red" }}
+                >
+                  刪除
+                </button>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
       ))}
     </div>

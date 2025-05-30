@@ -8,6 +8,23 @@ const Upload = () => {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
 
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreview(reader.result);
+      };
+      reader.readAsDataURL(selectedFile);
+      setError("");
+    } else {
+      setFile(null);
+      setPreview(null);
+      setError("請選擇一張圖片");
+    }
+  };
+
   const handleUpload = async () => {
     if (!file) {
       setError("請選擇照片");
@@ -25,24 +42,6 @@ const Upload = () => {
     } catch (err) {
       setError(err.response?.data?.error || "處理失敗，請稍後再試");
       setResult(null);
-    }
-  };
-
-  const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-      // 圖片預覽
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreview(reader.result); // 預覽圖片的 Base64 URL
-      };
-      reader.readAsDataURL(selectedFile);
-      setError("");
-    } else {
-      setFile(null);
-      setPreview(null);
-      setError("請選擇一張圖片");
     }
   };
 
@@ -66,8 +65,8 @@ const Upload = () => {
       <h2>上傳照片</h2>
       <input type="file" accept="image/*" onChange={handleFileChange} />
       {preview && (
-        <div style={{ margin: "20px 0" }}>
-          <h3>預覽圖片</h3>
+        <div style={{ margin: "10px 0" }}>
+          <h3>圖片預覽</h3>
           <img
             src={preview}
             alt="Preview"
@@ -87,6 +86,13 @@ const Upload = () => {
             style={{ width: "48px", height: "48px" }}
           />
           <Chart probabilities={result.probabilities} />
+          <h4>人體範圍</h4>
+          <img
+            src={result.human_mask_image}
+            alt="Human Mask"
+            style={{ maxWidth: "300px" }}
+          />
+          <h4>處理後圖片</h4>
           <img
             src={result.processed_image}
             alt="Processed"
