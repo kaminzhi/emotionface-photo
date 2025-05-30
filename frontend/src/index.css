@@ -1,0 +1,17 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: "Inter", sans-serif;
+  background-color: #f3f4f6;
+}
+
+.btn-primary {
+  @apply bg-primary text-white font-semibold py-2.5 px-5 rounded-lg shadow-custom hover:bg-blue-700 transition duration-300 text-base;
+}
+
+.btn-secondary {
+  @apply bg-secondary text-white font-semibold py-2.5 px-5 rounded-lg shadow-custom hover:bg-green-600 transition duration-300 text-base;
+}
