@@ -3,9 +3,7 @@ module.exports = {
   content: ["./src/**/*.{js,jsx,ts,tsx}"],
   theme: {
     extend: {
-      fontFamily: {
-        inter: ["Inter", "sans-serif"],
-      },
+      fontFamily: { inter: ["Inter", "sans-serif"] },
       colors: {
         primary: "#2563EB",
         secondary: "#10B981",
@@ -17,5 +15,5 @@ module.exports = {
       },
     },
   },
-  plugins: [],
+  plugins: [require("@tailwindcss/aspect-ratio")],
 };

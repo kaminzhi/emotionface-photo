@@ -83,7 +83,7 @@ def place_emojis(image: np.ndarray, emoji_base64: str, num_placements: int = Non
         positions = []
         h, w = image.shape[:2]
         num_placements = (
-            random.randint(3, 5) if num_placements is None else num_placements
+            random.randint(20, 30) if num_placements is None else num_placements
         )
         max_attempts = 100
         attempts = 0

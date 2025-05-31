@@ -11,7 +11,7 @@ const Admin = () => {
 
   const fetchEmotions = async () => {
     try {
-      const response = await axios.get("http://localhost:8000/admin/emotions");
+      const response = await axios.get("/admin/emotions");
       setEmotions(response.data);
       setError("");
     } catch (err) {
@@ -29,7 +29,7 @@ const Admin = () => {
     formData.append("emotion", emotion);
     formData.append("file", file);
     try {
-      await axios.post("http://localhost:8000/admin/upload", formData, {
+      await axios.post("/admin/upload", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setError("");
@@ -51,7 +51,7 @@ const Admin = () => {
     if (!window.confirm(`確定要刪除 ${emoji_name} 嗎？`)) return;
     try {
       await axios.post(
-        "http://localhost:8000/admin/delete",
+        "/admin/delete",
         new URLSearchParams({
           emotion,
           emoji_name,
