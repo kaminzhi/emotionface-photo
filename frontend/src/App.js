@@ -8,16 +8,14 @@ const App = () => {
     <Router>
       <nav className="bg-primary text-white p-3 shadow-sm sm:shadow-md">
         <div className="max-w-3xl mx-auto flex justify-between items-center">
-          <h1 className="text-lg font-semibold sm:text-xl">EmotionFace</h1>
+          <h1 className="text-lg font-semibold sm:text-xl">
+            <Link to="/" className="hover:text-accent transition-colors">
+              EmotionalFace
+            </Link>
+          </h1>
           <div className="flex gap-3 sm:gap-6">
             <Link
-              to="/"
-              className="font-medium text-sm sm:text-base hover:text-accent transition-colors"
-            >
-              Home
-            </Link>
-            <Link
-              to="/admin"
+              to="/panel"
               className="font-medium text-sm sm:text-base hover:text-accent transition-colors"
             >
               Admin
@@ -27,7 +25,7 @@ const App = () => {
       </nav>
       <Routes>
         <Route path="/" element={<Upload />} />
-        <Route path="/admin" element={<Admin />} />
+        <Route path="/panel" element={<Admin />} />
       </Routes>
     </Router>
   );

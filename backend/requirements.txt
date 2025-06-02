@@ -7,3 +7,4 @@ pillow
 redis
 numpy
 python-multipart
+scikit-learn
